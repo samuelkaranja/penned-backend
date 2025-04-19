@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from .models import Blog
 from django.contrib.auth.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
+
 
 
 class BlogSerializer(serializers.ModelSerializer):
@@ -8,26 +10,44 @@ class BlogSerializer(serializers.ModelSerializer):
         model = Blog  # Specify the model here
         fields = '__all__'  # Include all fields from the Blog model
 
-class SignUpSerializer(serializers.ModelSerializer):
-    confirm_password = serializers.CharField(write_only=True)
-    fullname = serializers.CharField(max_length=255)  # Add fullname field
+class SignupSerializer(serializers.ModelSerializer):
+    fullname = serializers.CharField(required=True)
+    confirm_password = serializers.CharField(write_only=True, required=True)
 
     class Meta:
         model = User
         fields = ['fullname', 'username', 'email', 'password', 'confirm_password']
+        extra_kwargs = {
+            'password': {'write_only': True},
+        }
 
-    def validate(self, data):
-        if data['password'] != data['confirm_password']:
-            raise serializers.ValidationError("Passwords do not match.")
-        return data
+    def validate(self, attrs):
+        if attrs['password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({"password": "Passwords do not match."})
+        return attrs
 
     def create(self, validated_data):
-        # Create a user with the fullname field included
-        user = User.objects.create_user(
+        fullname = validated_data.pop('fullname')
+        confirm_password = validated_data.pop('confirm_password')
+
+        user = User(
             username=validated_data['username'],
             email=validated_data['email'],
-            password=validated_data['password'],
+            first_name=fullname,  # Save fullname in first_name field
         )
-        user.first_name = validated_data['fullname']  # Store fullname in the first_name field
+        user.set_password(validated_data['password'])
         user.save()
         return user
+
+    def to_representation(self, instance):
+        refresh = RefreshToken.for_user(instance)
+        return {
+            'user': {
+                'id': instance.id,
+                'username': instance.username,
+                'email': instance.email,
+                'fullname': instance.first_name,
+            },
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+        }
