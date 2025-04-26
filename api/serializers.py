@@ -27,13 +27,17 @@ class SignupSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        fullname = validated_data.pop('fullname')
+        fullname = validated_data.pop('fullname').strip().title()
         confirm_password = validated_data.pop('confirm_password')
+        
+        first_name, *last_name = fullname.split(' ', 1)
+        last_name = last_name[0] if last_name else ''
 
         user = User(
             username=validated_data['username'],
             email=validated_data['email'],
-            first_name=fullname,  # Save fullname in first_name field
+            first_name=first_name,
+            last_name=last_name,
         )
         user.set_password(validated_data['password'])
         user.save()
@@ -46,7 +50,7 @@ class SignupSerializer(serializers.ModelSerializer):
                 'id': instance.id,
                 'username': instance.username,
                 'email': instance.email,
-                'fullname': instance.first_name,
+                'fullname': f"{instance.first_name} {instance.last_name}".strip(),
             },
             'access': str(refresh.access_token),
             'refresh': str(refresh),
